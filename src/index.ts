@@ -1,3 +1,16 @@
-import TmdbParseWorker from './workers/tmdb-parse-worker';
+import db from './app.db';
+import { tmdbWorker } from './workers/tmdb.worker';
 
-new TmdbParseWorker();
+console.log('--- TMDB API Service ---');
+
+process.on('uncaughtException', (err) => {
+    console.error('Unhandled Exception', err)
+});
+
+db.ready.then(() => {
+    console.log('DB connected');
+
+    tmdbWorker.test();
+}).catch((err) => {
+    console.log('FAILED DB connect', err);
+});

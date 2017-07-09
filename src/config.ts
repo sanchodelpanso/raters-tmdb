@@ -7,6 +7,11 @@ export default {
         host:       "localhost",
         database:   "raters",
         user:       "root",
-        password:   "San48122593"
+        password:   "San48122593",
+        port:       8889
+    },
+    redis: {
+        host:       'localhost',
+        port:       6379
     }
 }

@@ -3,9 +3,9 @@ let request = require( 'request' );
 class ImdbApiService {
     private baseUrl:string = `http://omdbapi.com`;
 
-    private movieDetailsUrl( id:number ) {
+    private movieDetailsUrl( id:number ):string {
         if(id.toString().length > 7)
-            return false;
+            return '';
 
         let requestId = "tt0000000";
         requestId = requestId.substr(0, (requestId.length - id.toString().length) ) + id;
@@ -18,6 +18,7 @@ class ImdbApiService {
             if(!id) resolve( null );
 
             request.get({url: this.movieDetailsUrl(id), json: true}, function (error:any, response:any, body:any) {
+                // console.log(body);
                 if (error || response.statusCode !== 200 || body.Response === 'False')
                     resolve( null );
 
