@@ -64,7 +64,6 @@ export class TMDBWorker {
                             const movie = line.movie;
                             this.processId(movie.id, ProcessingType.MOVIE).then(() => {
                                 line.next();
-                                console.log(movie.id);
                             });
                         },
                         noop,
