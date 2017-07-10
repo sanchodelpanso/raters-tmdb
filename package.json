@@ -11,6 +11,7 @@
   "dependencies": {
     "download": "^6.2.5",
     "extract-zip": "^1.6.5",
+    "line-by-line": "^0.1.5",
     "lodash": "^4.17.4",
     "moment": "^2.18.1",
     "mysql": "^2.13.0",
@@ -18,11 +19,13 @@
     "progress": "^1.1.8",
     "redis": "^2.7.1",
     "request": "^2.79.0",
+    "rxjs": "^5.4.2",
     "sequelize": "^4.2.1",
     "targz": "^1.0.1",
     "unzip": "^0.1.11"
   },
   "devDependencies": {
+    "@types/line-by-line": "^0.1.1",
     "@types/node": "^8.0.7",
     "@types/redis": "^2.6.0",
     "@types/sequelize": "^4.0.62",

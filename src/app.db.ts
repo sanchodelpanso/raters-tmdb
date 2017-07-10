@@ -22,6 +22,11 @@ class AppDb {
             host: config.db.host,
             port: config.db.port,
             dialect: 'mysql',
+            pool: {
+                max: 5,
+                min: 0,
+                idle: 10000
+            },
             logging: false,
             define: {
                 timestamps: false
@@ -34,7 +39,7 @@ class AppDb {
             .authenticate()
             .then(() => {
                 connected++;
-                if(connected == 2) {
+                if (connected == 2) {
                     state.emit(State.DB_READY);
                 }
             })
@@ -42,9 +47,9 @@ class AppDb {
                 state.emit(State.DB_CONNECT_ERROR, err);
             });
 
-        this.redis.on('connect', function() {
+        this.redis.on('connect', function () {
             connected++;
-            if(connected == 2) {
+            if (connected == 2) {
                 state.emit(State.DB_READY);
             }
         });
