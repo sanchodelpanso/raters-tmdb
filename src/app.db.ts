@@ -23,9 +23,9 @@ class AppDb {
             port: config.db.port,
             dialect: 'mysql',
             pool: {
-                max: 5,
+                max: 1,
                 min: 0,
-                idle: 10000
+                idle: 30000
             },
             logging: false,
             define: {

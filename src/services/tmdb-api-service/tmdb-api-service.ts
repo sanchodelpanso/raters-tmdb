@@ -93,7 +93,7 @@ export class TmdbApiService {
         return new Promise((resolve, reject) => {
             request.get({url: this.movieDetailsUrl(id), json: true}, function (error: any, response: any, body: any) {
                 if (error || response.statusCode !== 200)
-                    reject(error);
+                    resolve(null);
 
                 resolve(body);
             });

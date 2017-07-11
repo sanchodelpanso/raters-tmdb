@@ -5,10 +5,10 @@ export default {
     },
     db: {
         host:       "localhost",
-        database:   "raters",
+        database:   "raters_app",
         user:       "root",
         password:   "San48122593",
-        port:       8889
+        port:       3306
     },
     redis: {
         host:       'localhost',

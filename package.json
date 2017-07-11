@@ -25,11 +25,12 @@
     "unzip": "^0.1.11"
   },
   "devDependencies": {
+    "@types/bluebird": "^3.5.8",
     "@types/line-by-line": "^0.1.1",
+    "@types/lodash": "^4.14.68",
     "@types/node": "^8.0.7",
     "@types/redis": "^2.6.0",
     "@types/sequelize": "^4.0.62",
-    "tsc": "^1.20150623.0",
     "typescript": "^2.4.1"
   }
 }
