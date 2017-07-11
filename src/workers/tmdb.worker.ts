@@ -167,9 +167,9 @@ export class TMDBWorker {
             this.getRecord(id, type).then((record: MovieInstance) => {
                 if (!record || (type === ProcessingType.MOVIE && today.isBefore(record.release_date))) {
                     this.pushToStorage(key, String(id));
-
-                    resolve();
                 }
+
+                resolve();
             });
         });
     }
