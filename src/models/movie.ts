@@ -2,6 +2,7 @@ import * as Sequelize from 'sequelize';
 import db from '../app.db';
 
 export type MovieType = 'MOVIE' | 'TV';
+export type MovieStatus = 'Returning Series' | 'Ended' | 'Released' | 'In Production';
 
 export interface MovieAttribute {
     id?:             number;
@@ -15,6 +16,7 @@ export interface MovieAttribute {
     poster?:        string;
     backdrop?:      string;
     tmdb_popularity:number;
+    status?: MovieStatus;
 }
 
 export interface MovieInstance extends Sequelize.Instance<MovieAttribute>, MovieAttribute {
@@ -68,7 +70,11 @@ export const Movie: MovieModel = db.sequelize.define<MovieInstance, MovieAttribu
     tmdb_popularity: {
         type: Sequelize.FLOAT,
         allowNull: true
-    }
+    },
+    status: {
+        type: Sequelize.ENUM('Returning Series', 'Ended', 'Released', 'In Production'),
+        allowNull: true
+    },
 }, {
     tableName: 'movies'
 });

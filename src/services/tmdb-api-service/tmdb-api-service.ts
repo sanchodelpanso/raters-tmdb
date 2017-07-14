@@ -11,11 +11,18 @@ import { Observable } from 'rxjs/Observable';
 import * as LineByLineReader from 'line-by-line';
 
 import config from '../../config';
+import { TmdbTvShow } from './models/tv-show';
 
 export interface ShortMovie {
     adult: boolean;
     id: number;
     original_title: number;
+    popularity: number;
+}
+
+export interface ShortTv {
+    id: number;
+    original_name: number;
     popularity: number;
 }
 
@@ -25,6 +32,10 @@ export interface FileLineResponse {
 
 export interface FileMovieResponse extends FileLineResponse {
     movie: ShortMovie;
+}
+
+export interface FileTvResponse extends FileLineResponse {
+    tv: ShortTv;
 }
 
 export class TmdbApiService {
@@ -50,6 +61,10 @@ export class TmdbApiService {
         return `${this.baseUrl}/movie/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits`;
     }
 
+    private tvShowDetailsUrl(id: number) {
+        return `${this.baseUrl}/tv/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits,external_ids`;
+    }
+
     private personDetailsUrl(id: number) {
         return `${this.baseUrl}/person/${id}?api_key=${this.apiKey}&language=en-US`;
     }
@@ -59,6 +74,10 @@ export class TmdbApiService {
         return `movie_ids_${date}.json.gz`;
     }
 
+    private tvSeriesFileName(): string {
+        const date = moment().subtract(1, "days").format('MM_DD_YYYY');
+        return `tv_series_ids_${date}.json.gz`;
+    }
 
     public discoverMovies(page: number): Promise<{ movies: any, currentPage: number, totalPages: number }> {
         return new Promise((resolve, reject) => {
@@ -92,6 +111,18 @@ export class TmdbApiService {
     public getMovieById(id: number): Promise<TmdbMovie> {
         return new Promise((resolve, reject) => {
             request.get({url: this.movieDetailsUrl(id), json: true}, function (error: any, response: any, body: any) {
+                if (error || response.statusCode !== 200)
+                    resolve(null);
+
+                resolve(body);
+            });
+
+        });
+    }
+
+    public getTvById(id: number): Promise<TmdbTvShow> {
+        return new Promise((resolve, reject) => {
+            request.get({url: this.tvShowDetailsUrl(id), json: true}, function (error: any, response: any, body: any) {
                 if (error || response.statusCode !== 200)
                     resolve(null);
 
@@ -149,6 +180,44 @@ export class TmdbApiService {
 
         return fileSub.asObservable();
     }
+
+    public readTvSeriesFile(): Observable<FileTvResponse> {
+        const folder = 'temp';
+        const fileName = this.tvSeriesFileName();
+        const dataFileName = 'data.txt';
+        const url = this.fileBaseUrl + fileName;
+        const fileSub = new Rx.Subject();
+
+        download(url, folder).then(() => {
+            console.log(`FILE DOWNLOADED:`, url);
+            fs.createReadStream(`${folder}/${fileName}`)
+                .on('error', (err: any) => console.log(err))
+                .pipe(zlib.createUnzip())
+                .pipe(fs.createWriteStream(`${folder}/${dataFileName}`))
+                .on('close', () => {
+                    const reader = new LineByLineReader(`${folder}/${dataFileName}`);
+                    reader.on('error', (err: any) => console.log(err));
+                    reader.on('line', (line: any) => {
+                        const movie: ShortTv = JSON.parse(line);
+
+                        reader.pause();
+                        fileSub.next(<FileTvResponse>{
+                            tv: movie,
+                            next: reader.resume.bind(reader)
+                        });
+                    });
+                    reader.on('end', () => {
+                        rimraf(folder, () => {
+                            console.log(`FILE DELETED:`, url);
+                            fileSub.complete();
+                        });
+                    });
+                });
+        });
+
+        return fileSub.asObservable();
+    }
+
 }
 
 export const tmdb = new TmdbApiService(config.tmdb.apiKey);

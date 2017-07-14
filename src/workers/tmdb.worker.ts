@@ -1,11 +1,11 @@
-import { noop, range, unionWith, unionBy, isEqual, map, get, flatten, includes } from 'lodash';
+import { noop, range, unionWith, unionBy, isEqual, map, get, flatten, includes, sum } from 'lodash';
 import * as moment from 'moment';
 const Rx = require('rxjs/Rx');
 import 'rxjs/add/operator/filter';
 
-import { TmdbApiService, tmdb, FileMovieResponse } from '../services/tmdb-api-service/tmdb-api-service';
+import { TmdbApiService, tmdb, FileMovieResponse, FileTvResponse } from '../services/tmdb-api-service/tmdb-api-service';
 import { state } from '../app.state';
-import { Movie, MovieAttribute, MovieInstance, MovieModel, MovieType } from '../models/movie';
+import { Movie, MovieAttribute, MovieInstance, MovieModel, MovieStatus, MovieType } from '../models/movie';
 import db from '../app.db';
 import { TmdbMovie } from '../services/tmdb-api-service/models/movie';
 import { TmdbCrew } from '../services/tmdb-api-service/models/crew';
@@ -13,12 +13,12 @@ import { TmdbCast } from '../services/tmdb-api-service/models/cast';
 import { Person, PersonAttribute } from '../models/person';
 import { Crew, CrewAttribute } from '../models/crew';
 import { Cast, CastAttribute } from '../models/cast';
-import { TmdbCompany } from '../services/tmdb-api-service/models/company';
 import { Company, CompanyAttribute } from '../models/company';
 import { MovieCompany, MovieCompanyAttribute } from '../models/movie-company';
 import { MovieGenre, MovieGenreAttribute } from '../models/movie-genre';
 import { GenreAttribute } from '../models/genre';
 import { StepObservable } from '../utils/step-observable';
+import { TmdbTvShow } from '../services/tmdb-api-service/models/tv-show';
 
 
 enum ProcessingType {
@@ -33,8 +33,12 @@ export class TMDBWorker {
     private storagePrefix = 'tmdb_worker';
 
     public test() {
-        this.syncMovies(ProcessingType.MOVIE).then(() => {
-            console.log('DONE MOVIE SYNC');
+        // this.syncMovies(ProcessingType.MOVIE).then(() => {
+        //     console.log('DONE MOVIE SYNC');
+        // });
+
+        this.syncTvSeries().then(() => {
+            console.log('SYNC TVs: DONE');
         });
     }
 
@@ -44,7 +48,7 @@ export class TMDBWorker {
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
-            const popularityThreshold = 0.01;
+            const popularityThreshold = 0.51;
             const key = `id_queue_${ProcessingType.MOVIE}`;
 
             this.clearStorage(key).then(() => {
@@ -53,7 +57,7 @@ export class TMDBWorker {
                 const interval = setInterval(() => {
                     const listKey = `${this.storagePrefix}_${key}`;
                     db.redis.llen(listKey, (err, val) => console.log('DATA IN LIST:', val));
-                }, 5000);
+                }, 10000);
                 //TEMP
 
                 console.log('FETCH START');
@@ -77,14 +81,14 @@ export class TMDBWorker {
                         noop,
                         () => {
                             console.log('FETCH DONE');
-                            console.log('SYNC START');
+                            console.log('SYNC MOVIES: START');
 
                             //TEMP
                             clearInterval(interval);
                             //TEMP
 
-                            this.syncMovies(ProcessingType.MOVIE).then(() => {
-                                console.log('SYNC DONE');
+                            this.syncMovies().then(() => {
+                                console.log('SYNC MOVIES: DONE');
                                 resolve();
                             });
                         }
@@ -93,8 +97,63 @@ export class TMDBWorker {
         });
     }
 
-    private syncMovies(type: ProcessingType) {
-        const key = `id_queue_${type}`;
+    public updateTvSeries() {
+        return new Promise((resolve, reject) => {
+            /*
+             TODO: handle errors
+             */
+            console.log('TV SERIES UPDATE: START');
+            const popularityThreshold = 0.01;
+            const key = `id_queue_${ProcessingType.TV}`;
+
+            this.clearStorage(key).then(() => {
+
+                //TEMP
+                const interval = setInterval(() => {
+                    const listKey = `${this.storagePrefix}_${key}`;
+                    db.redis.llen(listKey, (err, val) => console.log('DATA IN LIST:', val));
+                }, 10000);
+                //TEMP
+
+                console.log('FETCH START');
+                this.tmdb.readTvSeriesFile()
+                    .filter((line: FileTvResponse) => {
+                        const movie = line.tv;
+                        const proceed = movie.popularity > popularityThreshold;
+
+                        if (!proceed) {
+                            line.next();
+                        }
+                        return proceed;
+                    })
+                    .subscribe(
+                        (line: FileTvResponse) => {
+                            const movie = line.tv;
+                            this.processId(movie.id, ProcessingType.TV).then(() => {
+                                line.next();
+                            });
+                        },
+                        noop,
+                        () => {
+                            console.log('FETCH DONE');
+                            console.log('SYNC TVs: START');
+
+                            //TEMP
+                            clearInterval(interval);
+                            //TEMP
+
+                            this.syncTvSeries().then(() => {
+                                console.log('SYNC TVs: DONE');
+                                resolve();
+                            });
+                        }
+                    );
+            });
+        });
+    }
+
+    private syncMovies() {
+        const key = `id_queue_${ProcessingType.MOVIE}`;
         const idRange = range(0, 4);
 
         return new Promise((resolve, reject) => {
@@ -144,6 +203,52 @@ export class TMDBWorker {
         });
     }
 
+    private syncTvSeries() {
+        const key = `id_queue_${ProcessingType.TV}`;
+        const idRange = range(0, 4);
+
+        return new Promise((resolve, reject) => {
+            Rx.Observable.interval(1050)
+                .switchMap(() => Rx.Observable.fromPromise(Promise.all(idRange.map(() => this.popFromStorage(key)))))
+                .map((data: string[]) => data.map(i => parseInt(i)).filter(i => !isNaN(i)))
+                .takeWhile((ids: number[]) => ids.length)
+                .switchMap((ids: number[]) => Rx.Observable.fromPromise(Promise.all(ids.map(id => this.tmdb.getTvById(id)))))
+                .map((series: TmdbTvShow[]) => series.filter(show => show))
+                .subscribe((series: TmdbTvShow[]) => {
+                        console.time(`All data save(${series.map(i => i.id).toString()})`);
+
+                        StepObservable
+                            .of(series)
+                            .subscribe((data) => {
+                                    const show = data.value;
+                                    this.saveTvShow(show)
+                                        .then(() => {
+                                            data.next();
+                                            /*
+                                             TODO: Update state in Redis
+                                             */
+                                        }).catch(err => console.log(err));
+                                },
+                                noop,
+                                () => {
+
+                                    this.saveMoviePeopleCollection(series)
+                                        .then(() => this.saveMovieGenreCollection(series))
+                                        .then(() => this.saveMovieCompanyCollection(series))
+                                        .then(() => {
+                                            console.timeEnd(`All data save(${series.map(i => i.id).toString()})`);
+                                        })
+                                        .catch(err => console.error('Error DB save:', err));
+                                }
+                            );
+                    },
+                    (err: any) => console.log('Error In PIPE', err),
+                    () => {
+                        resolve();
+                    });
+        });
+    }
+
     private popFromStorage(key: string) {
         return new Promise((resolve, reject) => {
             const listKey = `${this.storagePrefix}_${key}`;
@@ -165,7 +270,9 @@ export class TMDBWorker {
             let today: moment.Moment = moment();
 
             this.getRecord(id, type).then((record: MovieInstance) => {
-                if (!record || (type === ProcessingType.MOVIE && today.isBefore(record.release_date))) {
+                if (!record
+                    || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
+                    || (type === ProcessingType.TV && record.status !== 'Ended')) {
                     this.pushToStorage(key, String(id));
                 }
 
@@ -200,15 +307,17 @@ export class TMDBWorker {
     }
 
     private getRecord(id: number, type: ProcessingType) {
+        const movieType = type === ProcessingType.MOVIE ? 'MOVIE' : 'TV';
+
         return Movie.findOne({
             where: {
                 tmdb_id: id,
-                type: 'MOVIE'
+                type: movieType
             }
         });
     }
 
-    private saveMovieCompanyCollection(movies: TmdbMovie[]) {
+    private saveMovieCompanyCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[]) {
         const movieIds: number[] = movies.map(m => m.id);
 
         const movieCompanies: MovieCompanyAttribute[] = flatten(
@@ -271,7 +380,7 @@ export class TMDBWorker {
 
     }
 
-    private saveMovieGenreCollection(movies: TmdbMovie[]) {
+    private saveMovieGenreCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[]) {
         const movieIds: number[] = movies.map(m => m.id);
         const genres: MovieGenreAttribute[] = flatten(
             movies.map((movie) => {
@@ -342,13 +451,13 @@ export class TMDBWorker {
         }
     }
 
-    private saveMoviePeopleCollection(moviesTmdb: TmdbMovie[]) {
+    private saveMoviePeopleCollection<T extends TmdbTvShow | TmdbMovie>(moviesTmdb: T[]) {
         const movieIds: number[] = moviesTmdb.map(m => m.id);
 
         const allPeopleCrew = flatten(
             moviesTmdb
                 .map(movieTmdb => {
-                    const tmdbCrews = get<TmdbMovie, TmdbCrew[]>(movieTmdb, 'credits.crew');
+                    const tmdbCrews = get<T, TmdbCrew[]>(movieTmdb, 'credits.crew');
                     return map(tmdbCrews, item => {
                         return {
                             name: item.name,
@@ -364,7 +473,7 @@ export class TMDBWorker {
         const allPeopleCast = flatten(
             moviesTmdb
                 .map(movieTmdb => {
-                    const tmdbCrews = get<TmdbMovie, TmdbCast[]>(movieTmdb, 'credits.cast');
+                    const tmdbCrews = get<T, TmdbCast[]>(movieTmdb, 'credits.cast');
                     return map(tmdbCrews, item => {
                         return {
                             name: item.name,
@@ -488,14 +597,15 @@ export class TMDBWorker {
             const movieAttrs: MovieAttribute = {
                 tmdb_id: movieTmdb.id,
                 type: 'MOVIE',
-                release_date: movieTmdb.release_date,
+                release_date: movieTmdb.release_date || null,
                 tmdb_popularity: movieTmdb.popularity,
                 backdrop: movieTmdb.backdrop_path,
                 poster: movieTmdb.poster_path,
                 title: movieTmdb.title,
                 description: movieTmdb.overview,
                 imdb_id: movieTmdb.imdb_id ? parseInt(movieTmdb.imdb_id.substr(2)) : null,
-                runtime: movieTmdb.runtime
+                runtime: movieTmdb.runtime,
+                status: movieTmdb.status
             };
 
             Movie
@@ -513,20 +623,43 @@ export class TMDBWorker {
                     return Movie.create(movieAttrs);
                 })
                 .then(() => resolve());
+        });
+    }
 
-            // Movie.findOrCreate({
-            //     where: {
-            //         tmdb_id: movieAttrs.tmdb_id,
-            //         type: movieAttrs.type
-            //     },
-            //     defaults: movieAttrs
-            // }).spread((movie: MovieInstance, created: boolean) => {
-            //     if(!created) {
-            //         movie.update(movieAttrs).then(() => resolve());
-            //     } else {
-            //         resolve();
-            //     }
-            // });
+    private saveTvShow(showTmdb: TmdbTvShow) {
+        return new Promise((resolve, reject) => {
+            const imdbId = get<TmdbTvShow, string>(showTmdb, 'external_ids.imdb_id');
+            const avgRuntime = sum(showTmdb.episode_run_time) ? (sum(showTmdb.episode_run_time)/showTmdb.episode_run_time.length) : null;
+
+            const movieAttrs: MovieAttribute = {
+                tmdb_id: showTmdb.id,
+                type: 'TV',
+                release_date: showTmdb.first_air_date || null,
+                tmdb_popularity: showTmdb.popularity,
+                backdrop: showTmdb.backdrop_path,
+                poster: showTmdb.poster_path,
+                title: showTmdb.name,
+                description: showTmdb.overview,
+                imdb_id: imdbId ? parseInt(imdbId.substr(2)) : null,
+                runtime: avgRuntime,
+                status: showTmdb.status
+            };
+
+            Movie
+                .findOne({
+                    where: {
+                        tmdb_id: movieAttrs.tmdb_id,
+                        type: movieAttrs.type
+                    }
+                })
+                .then((movie) => {
+                    if (movie) {
+                        return movie.update(movieAttrs)
+                    }
+
+                    return Movie.create(movieAttrs);
+                })
+                .then(() => resolve());
         });
     }
 

@@ -3,34 +3,39 @@ import { TmdbCompany } from './company';
 import { TmdbCountry } from './country';
 import { TmdbCast } from './cast';
 import { TmdbCrew } from './crew';
+import { TmdbPerson } from './person';
+import { TmdbNetwork } from './network';
 
-export type TmdbReleaseStatus = 'Released' | 'In Production';
+export type TmdbTvStatus = 'Returning Series' | 'Ended';
 
-export interface  TmdbMovie {
-    adult: boolean;
+export interface  TmdbTvShow {
     backdrop_path: string;
-    budget: number;
+    created_by: Array<TmdbPerson>;
+    episode_run_time: Array<number>;
+    first_air_date: string;
     genres: Array<TmdbGenre>;
     id: number;
-    imdb_id: string;
+    in_production: boolean;
+    last_air_date: string;
+    name: string;
+    networks: Array<TmdbNetwork>;
+    number_of_episodes: number;
+    number_of_seasons: number;
     original_language: string;
-    original_title: string;
+    original_name: string;
     overview: string;
     popularity: number;
     poster_path: string;
     production_companies: Array<TmdbCompany>;
     production_countries: Array<TmdbCountry>;
-    release_date: string;
-    revenue: number;
-    runtime: number;
-    status: TmdbReleaseStatus;
-    tagline: string;
-    title: string;
-    video: boolean;
+    status: TmdbTvStatus;
     vote_average: number;
     vote_count: number;
     credits: {
         cast: Array<TmdbCast>;
         crew: Array<TmdbCrew>
-    }
+    };
+    external_ids: {
+        imdb_id: string;
+    };
 }

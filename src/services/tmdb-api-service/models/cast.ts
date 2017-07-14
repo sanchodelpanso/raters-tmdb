@@ -1,10 +1,7 @@
-export interface TmdbCast {
+import { TmdbPerson } from './person';
+
+export interface TmdbCast extends TmdbPerson {
     cast_id: number;
     character: string;
-    credit_id: string;
-    gender: number;
-    id: number;
-    name: string;
     order: number;
-    profile_path: string;
 }

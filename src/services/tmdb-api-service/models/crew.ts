@@ -1,9 +1,7 @@
-export interface TmdbCrew {
+import { TmdbPerson } from './person';
+
+export interface TmdbCrew extends TmdbPerson {
     credit_id: string;
     department: string;
-    gender: number;
-    id: number;
     job: string;
-    name: string;
-    profile_path: string;
 }

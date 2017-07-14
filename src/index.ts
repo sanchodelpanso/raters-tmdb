@@ -10,8 +10,9 @@ process.on('uncaughtException', (err) => {
 db.ready.then(() => {
     console.log('DB connected');
 
-    // tmdbWorker.test();
-    tmdbWorker.updateMovies();
+    tmdbWorker.updateTvSeries()
+        .then(() => tmdbWorker.updateMovies())
+        .then(() => console.log('MOVIES & TV UPDATE: DONE'));
 }).catch((err) => {
     console.log('FAILED DB connect', err);
 });
