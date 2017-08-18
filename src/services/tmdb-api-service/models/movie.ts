@@ -4,7 +4,7 @@ import { TmdbCountry } from './country';
 import { TmdbCast } from './cast';
 import { TmdbCrew } from './crew';
 
-export type TmdbReleaseStatus = 'Released' | 'In Production';
+export type TmdbReleaseStatus = 'Released' | 'In Production' | 'Planned';
 
 export interface  TmdbMovie {
     adult: boolean;

@@ -1,11 +1,10 @@
-import { noop, range, unionWith, unionBy, isEqual, map, get, flatten, includes, sum } from 'lodash';
+import { noop, range, unionWith, unionBy, isEqual, map, get, flatten, includes, sum, values } from 'lodash';
 import * as moment from 'moment';
 const Rx = require('rxjs/Rx');
 import 'rxjs/add/operator/filter';
 
 import { TmdbApiService, tmdb, FileMovieResponse, FileTvResponse } from '../services/tmdb-api-service/tmdb-api-service';
-import { state } from '../app.state';
-import { Movie, MovieAttribute, MovieInstance, MovieModel, MovieStatus, MovieType } from '../models/movie';
+import { Movie, MovieAttribute, MovieInstance } from '../models/movie';
 import db from '../app.db';
 import { TmdbMovie } from '../services/tmdb-api-service/models/movie';
 import { TmdbCrew } from '../services/tmdb-api-service/models/crew';
@@ -21,7 +20,7 @@ import { StepObservable } from '../utils/step-observable';
 import { TmdbTvShow } from '../services/tmdb-api-service/models/tv-show';
 
 
-enum ProcessingType {
+export enum ProcessingType {
     MOVIE,
     TV,
     PEOPLE
@@ -42,24 +41,19 @@ export class TMDBWorker {
         });
     }
 
-    public updateMovies() {
-        return new Promise((resolve, reject) => {
+    public updateMovies(): Promise<number> {
+        return new Promise((resolve) => {
             /*
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
             const popularityThreshold = 0.51;
             const key = `id_queue_${ProcessingType.MOVIE}`;
+            const listKey = `${this.storagePrefix}_${key}`;
+
+            let moviesUpdated: number;
 
             this.clearStorage(key).then(() => {
-
-                //TEMP
-                const interval = setInterval(() => {
-                    const listKey = `${this.storagePrefix}_${key}`;
-                    db.redis.llen(listKey, (err, val) => console.log('DATA IN LIST:', val));
-                }, 10000);
-                //TEMP
-
                 console.log('FETCH START');
                 this.tmdb.readMoviesFile()
                     .filter((line: FileMovieResponse) => {
@@ -83,13 +77,11 @@ export class TMDBWorker {
                             console.log('FETCH DONE');
                             console.log('SYNC MOVIES: START');
 
-                            //TEMP
-                            clearInterval(interval);
-                            //TEMP
+                            db.redis.llen(listKey, (err, val) => moviesUpdated = val);
 
                             this.syncMovies().then(() => {
                                 console.log('SYNC MOVIES: DONE');
-                                resolve();
+                                resolve(moviesUpdated);
                             });
                         }
                     );
@@ -97,7 +89,7 @@ export class TMDBWorker {
         });
     }
 
-    public updateTvSeries() {
+    public updateTvSeries(): Promise<number> {
         return new Promise((resolve, reject) => {
             /*
              TODO: handle errors
@@ -105,16 +97,10 @@ export class TMDBWorker {
             console.log('TV SERIES UPDATE: START');
             const popularityThreshold = 0.01;
             const key = `id_queue_${ProcessingType.TV}`;
+            const listKey = `${this.storagePrefix}_${key}`;
+            let showsUpdated: number;
 
             this.clearStorage(key).then(() => {
-
-                //TEMP
-                const interval = setInterval(() => {
-                    const listKey = `${this.storagePrefix}_${key}`;
-                    db.redis.llen(listKey, (err, val) => console.log('DATA IN LIST:', val));
-                }, 10000);
-                //TEMP
-
                 console.log('FETCH START');
                 this.tmdb.readTvSeriesFile()
                     .filter((line: FileTvResponse) => {
@@ -138,13 +124,11 @@ export class TMDBWorker {
                             console.log('FETCH DONE');
                             console.log('SYNC TVs: START');
 
-                            //TEMP
-                            clearInterval(interval);
-                            //TEMP
+                            db.redis.llen(listKey, (err, val) => showsUpdated = val);
 
                             this.syncTvSeries().then(() => {
                                 console.log('SYNC TVs: DONE');
-                                resolve();
+                                resolve(showsUpdated);
                             });
                         }
                     );
@@ -156,7 +140,7 @@ export class TMDBWorker {
         const key = `id_queue_${ProcessingType.MOVIE}`;
         const idRange = range(0, 4);
 
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             Rx.Observable.interval(1050)
                 .switchMap(() => Rx.Observable.fromPromise(Promise.all(idRange.map(() => this.popFromStorage(key)))))
                 .map((data: string[]) => data.map(i => parseInt(i)).filter(i => !isNaN(i)))
@@ -167,6 +151,7 @@ export class TMDBWorker {
                 // .do((movies: TmdbMovie[]) => console.timeEnd(`GET Movies(${movies.map(i => i.id).toString()})`))
                 .subscribe((movies: TmdbMovie[]) => {
                     console.time(`All data save(${movies.map(i => i.id).toString()})`);
+                    let movieIds = {};
 
                     StepObservable
                         .of(movies)
@@ -176,7 +161,8 @@ export class TMDBWorker {
                                     // .then(() => this.saveMoviePeople(movie))
                                     // .then(() => this.saveMovieGenres(movie))
                                     // .then(() => this.saveMovieCompanies(movie))
-                                    .then(() => {
+                                    .then((movieInDb) => {
+                                        movieIds[movie.id] = movieInDb.id;
                                         data.next();
                                         /*
                                          TODO: Update state in Redis
@@ -185,10 +171,9 @@ export class TMDBWorker {
                             },
                             noop,
                             () => {
-
-                                this.saveMoviePeopleCollection(movies)
-                                    .then(() => this.saveMovieGenreCollection(movies))
-                                    .then(() => this.saveMovieCompanyCollection(movies))
+                                this.saveMoviePeopleCollection(movies, movieIds)
+                                    .then(() => this.saveMovieGenreCollection(movies, movieIds))
+                                    .then(() => this.saveMovieCompanyCollection(movies, movieIds))
                                     .then(() => {
                                         console.timeEnd(`All data save(${movies.map(i => i.id).toString()})`);
                                     })
@@ -216,13 +201,16 @@ export class TMDBWorker {
                 .map((series: TmdbTvShow[]) => series.filter(show => show))
                 .subscribe((series: TmdbTvShow[]) => {
                         console.time(`All data save(${series.map(i => i.id).toString()})`);
+                        let movieIds = {};
 
                         StepObservable
                             .of(series)
                             .subscribe((data) => {
                                     const show = data.value;
                                     this.saveTvShow(show)
-                                        .then(() => {
+                                        .then((movieInDb) => {
+                                            movieIds[show.id] = movieInDb.id;
+
                                             data.next();
                                             /*
                                              TODO: Update state in Redis
@@ -231,10 +219,9 @@ export class TMDBWorker {
                                 },
                                 noop,
                                 () => {
-
-                                    this.saveMoviePeopleCollection(series)
-                                        .then(() => this.saveMovieGenreCollection(series))
-                                        .then(() => this.saveMovieCompanyCollection(series))
+                                    this.saveMoviePeopleCollection(series, movieIds)
+                                        .then(() => this.saveMovieGenreCollection(series, movieIds))
+                                        .then(() => this.saveMovieCompanyCollection(series, movieIds))
                                         .then(() => {
                                             console.timeEnd(`All data save(${series.map(i => i.id).toString()})`);
                                         })
@@ -273,6 +260,12 @@ export class TMDBWorker {
                 if (!record
                     || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
                     || (type === ProcessingType.TV && record.status !== 'Ended')) {
+                    this.pushToStorage(key, String(id));
+                }
+                /**
+                   TODO: Remove after movies db refresh
+                 */
+                else {
                     this.pushToStorage(key, String(id));
                 }
 
@@ -317,14 +310,14 @@ export class TMDBWorker {
         });
     }
 
-    private saveMovieCompanyCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[]) {
-        const movieIds: number[] = movies.map(m => m.id);
+    private saveMovieCompanyCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[], idsRelation: any) {
+        const movieIds: number[] = values(idsRelation);
 
         const movieCompanies: MovieCompanyAttribute[] = flatten(
             movies.map(movie => {
                 return map(movie.production_companies, company => {
                     return {
-                        movie_id: movie.id,
+                        movie_id: idsRelation[movie.id],
                         company_id: company.id
                     };
                 });
@@ -380,13 +373,14 @@ export class TMDBWorker {
 
     }
 
-    private saveMovieGenreCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[]) {
-        const movieIds: number[] = movies.map(m => m.id);
+    private saveMovieGenreCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[], idsRelation: any) {
+        const movieIds: number[] = values(idsRelation);
+
         const genres: MovieGenreAttribute[] = flatten(
             movies.map((movie) => {
                 return map(movie.genres, genre => {
                     return {
-                        movie_id: movie.id,
+                        movie_id: idsRelation[movie.id],
                         genre_id: genre.id
                     };
                 });
@@ -451,8 +445,8 @@ export class TMDBWorker {
         }
     }
 
-    private saveMoviePeopleCollection<T extends TmdbTvShow | TmdbMovie>(moviesTmdb: T[]) {
-        const movieIds: number[] = moviesTmdb.map(m => m.id);
+    private saveMoviePeopleCollection<T extends TmdbTvShow | TmdbMovie>(moviesTmdb: T[], idsRelation: any) {
+        const movieIds: number[] = values(idsRelation);
 
         const allPeopleCrew = flatten(
             moviesTmdb
@@ -495,7 +489,7 @@ export class TMDBWorker {
         const crews: CrewAttribute[] = allPeopleCrew.map(item => {
             return {
                 person_id: item.id,
-                movie_id: item.movie_id,
+                movie_id: idsRelation[item.movie_id],
                 job: item.job
             };
         });
@@ -503,8 +497,8 @@ export class TMDBWorker {
         const casts: CastAttribute[] = allPeopleCast.map(item => {
             return {
                 person_id: item.id,
-                movie_id: item.movie_id,
-                name: item.character
+                movie_id: idsRelation[item.movie_id],
+                character: item.character
             };
         });
 
@@ -562,7 +556,7 @@ export class TMDBWorker {
             const cast: CastAttribute = {
                 person_id: item.id,
                 movie_id: movieTmdb.id,
-                name: item.name
+                character: item.character
             };
 
             return cast;
@@ -592,7 +586,7 @@ export class TMDBWorker {
             .then(() => Promise.all([Crew.bulkCreate(crews), Cast.bulkCreate(casts)]));
     }
 
-    private saveMovie(movieTmdb: TmdbMovie) {
+    private saveMovie(movieTmdb: TmdbMovie): Promise<MovieInstance> {
         return new Promise((resolve, reject) => {
             const movieAttrs: MovieAttribute = {
                 tmdb_id: movieTmdb.id,
@@ -622,11 +616,11 @@ export class TMDBWorker {
 
                     return Movie.create(movieAttrs);
                 })
-                .then(() => resolve());
+                .then((movie) => resolve(movie));
         });
     }
 
-    private saveTvShow(showTmdb: TmdbTvShow) {
+    private saveTvShow(showTmdb: TmdbTvShow): Promise<MovieInstance> {
         return new Promise((resolve, reject) => {
             const imdbId = get<TmdbTvShow, string>(showTmdb, 'external_ids.imdb_id');
             const avgRuntime = sum(showTmdb.episode_run_time) ? (sum(showTmdb.episode_run_time)/showTmdb.episode_run_time.length) : null;
@@ -659,7 +653,9 @@ export class TMDBWorker {
 
                     return Movie.create(movieAttrs);
                 })
-                .then(() => resolve());
+                .then((movie) => {
+                    resolve(movie);
+                });
         });
     }
 

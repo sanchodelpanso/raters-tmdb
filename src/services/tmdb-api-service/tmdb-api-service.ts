@@ -10,7 +10,7 @@ const Rx = require('rxjs/Rx');
 import { Observable } from 'rxjs/Observable';
 import * as LineByLineReader from 'line-by-line';
 
-import config from '../../config';
+import { config } from '../../config';
 import { TmdbTvShow } from './models/tv-show';
 
 export interface ShortMovie {

@@ -2,7 +2,7 @@ import * as Sequelize from 'sequelize';
 import db from '../app.db';
 
 export type MovieType = 'MOVIE' | 'TV';
-export type MovieStatus = 'Returning Series' | 'Ended' | 'Released' | 'In Production';
+export type MovieStatus = 'Returning Series' | 'Ended' | 'Released' | 'In Production' | 'Planned';
 
 export interface MovieAttribute {
     id?:             number;

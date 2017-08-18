@@ -4,7 +4,7 @@ import db from '../app.db';
 export interface CastAttribute {
     movie_id:       number;
     person_id:      number;
-    name?:          string;
+    character?:     string;
 }
 
 export interface CastInstance extends Sequelize.Instance<CastAttribute>, CastAttribute {
@@ -23,7 +23,7 @@ export const Cast: CastModel = db.sequelize.define<CastInstance, CastAttribute>(
         allowNull: false,
         primaryKey: true
     },
-    name: {
+    character: {
         type: Sequelize.STRING(2048),
         allowNull: true
     }

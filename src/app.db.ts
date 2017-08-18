@@ -1,9 +1,10 @@
+import { State } from './state/state';
 const Sequelize = require('sequelize');
 import * as sequelize from 'sequelize';
 import * as redis from 'redis';
 
-import { state, State } from './app.state';
-import config from './config';
+import { state } from './state/app.state';
+import { config } from './config';
 
 class AppDb {
 

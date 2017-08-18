@@ -1,5 +1,5 @@
 import db from './app.db';
-import { tmdbWorker } from './workers/tmdb.worker';
+import { schedule } from './app.schedule';
 
 console.log('--- TMDB API Service ---');
 
@@ -10,9 +10,8 @@ process.on('uncaughtException', (err) => {
 db.ready.then(() => {
     console.log('DB connected');
 
-    tmdbWorker.updateTvSeries()
-        .then(() => tmdbWorker.updateMovies())
-        .then(() => console.log('MOVIES & TV UPDATE: DONE'));
+    schedule.runMovieUpdates();
+
 }).catch((err) => {
     console.log('FAILED DB connect', err);
 });

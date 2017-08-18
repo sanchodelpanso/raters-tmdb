@@ -1,4 +1,4 @@
-export default {
+export const config = {
     tmdb: {
         apiKey:     "64395b3231fab521986c7fccf8164311",
         lang:       "en-US"
@@ -13,5 +13,13 @@ export default {
     redis: {
         host:       'localhost',
         port:       6379
+    },
+    mailgun: {
+        domain: 'raters.iondigi.com',
+        apiKey: 'key-3a105a9f259fd6c5147cea89be3310c2'
+    },
+
+    admin: {
+        email: 'sanchodelpanso@gmail.com'
     }
 }
