@@ -7,7 +7,7 @@ export class AppSchedule {
 
     public runMovieUpdates() {
         // const rule = '0 0 14 * * 1'; //Every Monday at 14.00 UTC
-        const rule = '0 35 22 * * 5';
+        const rule = '0 17 20 * * 1';
         const job: Job = scheduleJob(rule, () => {
             let updatedNumber: any = {
                 movies: null,

@@ -15,7 +15,6 @@ import { Cast, CastAttribute } from '../models/cast';
 import { Company, CompanyAttribute } from '../models/company';
 import { MovieCompany, MovieCompanyAttribute } from '../models/movie-company';
 import { MovieGenre, MovieGenreAttribute } from '../models/movie-genre';
-import { GenreAttribute } from '../models/genre';
 import { StepObservable } from '../utils/step-observable';
 import { TmdbTvShow } from '../services/tmdb-api-service/models/tv-show';
 
@@ -36,9 +35,9 @@ export class TMDBWorker {
         //     console.log('DONE MOVIE SYNC');
         // });
 
-        this.syncTvSeries().then(() => {
-            console.log('SYNC TVs: DONE');
-        });
+        // this.syncTvSeries().then(() => {
+        //     console.log('SYNC TVs: DONE');
+        // });
     }
 
     public updateMovies(): Promise<number> {
@@ -47,7 +46,7 @@ export class TMDBWorker {
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
-            const popularityThreshold = 0.51;
+            const popularityThreshold = 0.01;
             const key = `id_queue_${ProcessingType.MOVIE}`;
             const listKey = `${this.storagePrefix}_${key}`;
 
@@ -158,9 +157,6 @@ export class TMDBWorker {
                         .subscribe((data) => {
                                 const movie = data.value;
                                 this.saveMovie(movie)
-                                    // .then(() => this.saveMoviePeople(movie))
-                                    // .then(() => this.saveMovieGenres(movie))
-                                    // .then(() => this.saveMovieCompanies(movie))
                                     .then((movieInDb) => {
                                         movieIds[movie.id] = movieInDb.id;
                                         data.next();
@@ -256,21 +252,21 @@ export class TMDBWorker {
             const key = `id_queue_${type}`;
             let today: moment.Moment = moment();
 
-            this.getRecord(id, type).then((record: MovieInstance) => {
-                if (!record
-                    || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
-                    || (type === ProcessingType.TV && record.status !== 'Ended')) {
+            // this.getRecord(id, type).then((record: MovieInstance) => {
+                // if (!record
+                //     || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
+                //     || (type === ProcessingType.TV && record.status !== 'Ended')) {
+                //     this.pushToStorage(key, String(id));
+                // }
+                // /**
+                //    TODO: Remove after movies db refresh
+                //  */
+                // else {
                     this.pushToStorage(key, String(id));
-                }
-                /**
-                   TODO: Remove after movies db refresh
-                 */
-                else {
-                    this.pushToStorage(key, String(id));
-                }
+                // }
 
                 resolve();
-            });
+            // });
         });
     }
 
@@ -344,35 +340,6 @@ export class TMDBWorker {
 
     }
 
-    private saveMovieCompanies(movieTmdb: TmdbMovie) {
-        const companies: CompanyAttribute[] = map(movieTmdb.production_companies, company => company);
-
-        return Company
-            .destroy({
-                where: {
-                    id: companies.map(company => company.id)
-                }
-            })
-            .then(() => Company.bulkCreate(companies))
-            .then(() => MovieCompany
-                .destroy({
-                    where: {
-                        movie_id: movieTmdb.id
-                    }
-                })
-            ).then(() => MovieCompany
-                .bulkCreate(companies.map(company => {
-                    const movieCompany: MovieCompanyAttribute = {
-                        movie_id: movieTmdb.id,
-                        company_id: company.id
-                    };
-
-                    return movieCompany;
-                }))
-            );
-
-    }
-
     private saveMovieGenreCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[], idsRelation: any) {
         const movieIds: number[] = values(idsRelation);
 
@@ -395,46 +362,6 @@ export class TMDBWorker {
             })
             .then(() => MovieGenre.bulkCreate(genres));
 
-    }
-
-    private saveMovieGenres(movieTmdb: TmdbMovie) {
-        const genres: GenreAttribute[] = map(movieTmdb.genres, genre => genre);
-
-        return MovieGenre
-            .destroy({
-                where: {
-                    movie_id: movieTmdb.id
-                }
-            })
-            .then(() => MovieGenre
-                .bulkCreate(genres.map(genre => {
-                    const movieGenre: MovieGenreAttribute = {
-                        movie_id: movieTmdb.id,
-                        genre_id: genre.id
-                    };
-
-                    return movieGenre;
-                }))
-            );
-
-    }
-
-    private savePerson(person: PersonAttribute) {
-        return Person.findOrCreate({
-            where: {
-                id: person.id
-            },
-            defaults: person
-        });
-    }
-
-    private saveCompany(company: CompanyAttribute) {
-        return Company.findOrCreate({
-            where: {
-                id: company.id
-            },
-            defaults: company
-        });
     }
 
     private mapPerson(data: TmdbCrew | TmdbCast): PersonAttribute {
@@ -532,58 +459,6 @@ export class TMDBWorker {
             )
             .then(() => Crew.bulkCreate(crews))
             .then(() => Cast.bulkCreate(casts));
-    }
-
-    private saveMoviePeople(movieTmdb: TmdbMovie) {
-        const tmdbCrews = get<TmdbMovie, TmdbCrew[]>(movieTmdb, 'credits.crew');
-        const tmdbCasts = get<TmdbMovie, TmdbCast[]>(movieTmdb, 'credits.cast');
-
-        const crewPeople = map(tmdbCrews, this.mapPerson);
-        const castPeople = map(tmdbCasts, this.mapPerson);
-        const people: PersonAttribute[] = unionWith(crewPeople, castPeople, isEqual);
-
-        const crews = map(tmdbCrews, item => {
-            const crew: CrewAttribute = {
-                person_id: item.id,
-                movie_id: movieTmdb.id,
-                job: item.job
-            };
-
-            return crew;
-        });
-
-        const casts = map(tmdbCasts, item => {
-            const cast: CastAttribute = {
-                person_id: item.id,
-                movie_id: movieTmdb.id,
-                character: item.character
-            };
-
-            return cast;
-        });
-
-        return Person
-            .destroy({
-                where: {
-                    id: people.map(person => person.id)
-                }
-            })
-            .then(() => Person.bulkCreate(people))
-            .then(() => {
-                return Promise.all([
-                    Crew.destroy({
-                        where: {
-                            movie_id: movieTmdb.id
-                        }
-                    }),
-                    Cast.destroy({
-                        where: {
-                            movie_id: movieTmdb.id
-                        }
-                    })
-                ])
-            })
-            .then(() => Promise.all([Crew.bulkCreate(crews), Cast.bulkCreate(casts)]));
     }
 
     private saveMovie(movieTmdb: TmdbMovie): Promise<MovieInstance> {
