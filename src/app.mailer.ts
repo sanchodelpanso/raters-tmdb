@@ -13,7 +13,7 @@ export class AppMailer {
     public sendToAdmin(subject: string, text: string) {
         const data = {
             from: this.from,
-            to: config.admin.email,
+            to: config.admin.email.join(','),
             subject: subject,
             text: text
         };

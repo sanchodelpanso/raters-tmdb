@@ -252,21 +252,15 @@ export class TMDBWorker {
             const key = `id_queue_${type}`;
             let today: moment.Moment = moment();
 
-            // this.getRecord(id, type).then((record: MovieInstance) => {
-                // if (!record
-                //     || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
-                //     || (type === ProcessingType.TV && record.status !== 'Ended')) {
-                //     this.pushToStorage(key, String(id));
-                // }
-                // /**
-                //    TODO: Remove after movies db refresh
-                //  */
-                // else {
+            this.getRecord(id, type).then((record: MovieInstance) => {
+                if (!record
+                    || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
+                    || (type === ProcessingType.TV && record.status !== 'Ended')) {
                     this.pushToStorage(key, String(id));
-                // }
+                }
 
                 resolve();
-            // });
+            });
         });
     }
 
