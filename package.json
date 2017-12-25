@@ -34,6 +34,7 @@
     "@types/node-schedule": "^1.2.0",
     "@types/redis": "^2.6.0",
     "@types/sequelize": "^4.0.62",
+    "tsc": "^1.20150623.0",
     "typescript": "^2.4.1"
   }
 }

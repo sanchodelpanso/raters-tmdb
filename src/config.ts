@@ -7,7 +7,7 @@ export const config = {
         host:       "localhost",
         database:   "raters_app",
         user:       "root",
-        password:   "San48122593",
+        password:   "root",
         port:       3306
     },
     redis: {
