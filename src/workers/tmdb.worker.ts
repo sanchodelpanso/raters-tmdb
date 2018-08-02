@@ -37,7 +37,7 @@ export class TMDBWorker {
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
-            const popularityThreshold = 10.1;
+            const popularityThreshold = 0.1;
             const key = `id_queue_${ProcessingType.MOVIE}`;
             const listKey = `${this.storagePrefix}_${key}`;
 
@@ -85,7 +85,7 @@ export class TMDBWorker {
              TODO: handle errors
              */
             console.log('TV SERIES UPDATE: START');
-            const popularityThreshold = 10.1;
+            const popularityThreshold = 0.1;
             const key = `id_queue_${ProcessingType.TV}`;
             const listKey = `${this.storagePrefix}_${key}`;
             let showsUpdated: number;
