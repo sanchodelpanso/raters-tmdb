@@ -31,27 +31,23 @@ export class AppSchedule {
     }
 
     public runForceMovieUpdates() {
-        const rule = '0 40 20 * * 4';//Every Monday at 14.00 UTC
+        let updatedNumber: any = {
+            movies: null,
+            shows: null
+        };
 
-        scheduleJob(rule, () => {
-            let updatedNumber: any = {
-                movies: null,
-                shows: null
-            };
+        tmdbWorker.updateTvSeries(true)
+            .then(updated =>  {
+                updatedNumber.shows = updated;
+                return tmdbWorker.updateMovies(true);
+            })
+            .then(updated => {
+                updatedNumber.movies = updated;
+                searchApi.sync();
 
-            tmdbWorker.updateTvSeries(true)
-                .then(updated =>  {
-                    updatedNumber.shows = updated;
-                    return tmdbWorker.updateMovies(true);
-                })
-                .then(updated => {
-                    updatedNumber.movies = updated;
-                    searchApi.sync();
-
-                    state.emit(State.TMDB_MOVIE_TV_DONE, updatedNumber);
-                    console.log('MOVIES & TV UPDATE: DONE');
-                });
-        });
+                state.emit(State.TMDB_MOVIE_TV_DONE, updatedNumber);
+                console.log('MOVIES & TV UPDATE: DONE');
+            });
     }
 }
 

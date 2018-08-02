@@ -31,23 +31,13 @@ export class TMDBWorker {
     private tmdb: TmdbApiService = tmdb;
     private storagePrefix = 'tmdb_worker';
 
-    public force() {
-        // this.syncMovies(ProcessingType.MOVIE).then(() => {
-        //     console.log('DONE MOVIE SYNC');
-        // });
-
-        // this.syncTvSeries().then(() => {
-        //     console.log('SYNC TVs: DONE');
-        // });
-    }
-
     public updateMovies(force: boolean = false): Promise<number> {
         return new Promise((resolve) => {
             /*
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
-            const popularityThreshold = 0.1;
+            const popularityThreshold = 10.1;
             const key = `id_queue_${ProcessingType.MOVIE}`;
             const listKey = `${this.storagePrefix}_${key}`;
 
@@ -95,7 +85,7 @@ export class TMDBWorker {
              TODO: handle errors
              */
             console.log('TV SERIES UPDATE: START');
-            const popularityThreshold = 0.1;
+            const popularityThreshold = 10.1;
             const key = `id_queue_${ProcessingType.TV}`;
             const listKey = `${this.storagePrefix}_${key}`;
             let showsUpdated: number;
@@ -150,7 +140,7 @@ export class TMDBWorker {
                 .map((movies: TmdbMovie[]) => movies.filter(movie => movie))
                 // .do((movies: TmdbMovie[]) => console.timeEnd(`GET Movies(${movies.map(i => i.id).toString()})`))
                 .subscribe((movies: TmdbMovie[]) => {
-                    console.time(`All data save(${movies.map(i => i.id).toString()})`);
+                    // console.time(`All data save(${movies.map(i => i.id).toString()})`);
                     let movieIds = {};
 
                     StepObservable
@@ -173,7 +163,7 @@ export class TMDBWorker {
                                     .then(() => this.saveMovieCompanyCollection(movies, movieIds))
                                     .then(() => this.saveMovieVideoCollection(movies, movieIds))
                                     .then(() => {
-                                        console.timeEnd(`All data save(${movies.map(i => i.id).toString()})`);
+                                        // console.timeEnd(`All data save(${movies.map(i => i.id).toString()})`);
                                     })
                                     .catch(err => console.error('Error DB save:', err));
                             }
@@ -198,7 +188,7 @@ export class TMDBWorker {
                 .switchMap((ids: number[]) => Rx.Observable.fromPromise(Promise.all(ids.map(id => this.tmdb.getTvById(id)))))
                 .map((series: TmdbTvShow[]) => series.filter(show => show))
                 .subscribe((series: TmdbTvShow[]) => {
-                        console.time(`All data save(${series.map(i => i.id).toString()})`);
+                        // console.time(`All data save(${series.map(i => i.id).toString()})`);
                         let movieIds = {};
 
                         StepObservable
@@ -222,7 +212,7 @@ export class TMDBWorker {
                                         .then(() => this.saveMovieCompanyCollection(series, movieIds))
                                         .then(() => this.saveMovieVideoCollection(series, movieIds))
                                         .then(() => {
-                                            console.timeEnd(`All data save(${series.map(i => i.id).toString()})`);
+                                            // console.timeEnd(`All data save(${series.map(i => i.id).toString()})`);
                                         })
                                         .catch(err => console.error('Error DB save:', err));
                                 }
@@ -350,7 +340,7 @@ export class TMDBWorker {
 
         const moviesVideos: VideoAttribute[] = flatten(
             movies.map(movie => {
-                const videos = movie.videos.results.filter(video => video.type === 'Trailer' && video.site === 'Youtube');
+                const videos = movie.videos.results.filter(video => video.type === 'Trailer' && video.site === 'YouTube');
                 return map(videos, video => {
                     return {
                         id: video.id,

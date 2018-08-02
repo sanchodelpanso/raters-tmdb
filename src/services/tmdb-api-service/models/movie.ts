@@ -6,7 +6,7 @@ import { TmdbCrew } from './crew';
 
 export type TmdbReleaseStatus = 'Released' | 'In Production' | 'Planned' | 'Returning Series' | 'Ended' | 'Canceled' | 'Post Production';
 
-export type TmdbMovieVideoSite = 'Youtube';
+export type TmdbMovieVideoSite = 'YouTube';
 export type TmdbMovieVideoType = 'Trailer' | 'Teaser' | 'Clip' | 'Featurette';
 
 export interface TmdbMovieVideo {

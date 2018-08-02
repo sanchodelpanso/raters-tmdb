@@ -2,7 +2,7 @@ import * as Sequelize from 'sequelize';
 import db from '../app.db';
 
 export type MovieType = 'MOVIE' | 'TV';
-export type MovieStatus = 'Returning Series' | 'Ended' | 'Released' | 'In Production' | 'Planned' | 'Canceled' | 'Post Production';
+export type MovieStatus = 'Returning Series' | 'Ended' | 'Released' | 'In Production' | 'Planned' | 'Canceled' | 'Post Production' | 'Pilot';
 
 export interface MovieAttribute {
     id?:            number;
@@ -72,7 +72,7 @@ export const Movie: MovieModel = db.sequelize.define<MovieInstance, MovieAttribu
         allowNull: true
     },
     status: {
-        type: Sequelize.ENUM('Returning Series', 'Ended', 'Released', 'In Production', 'Planned', 'Canceled', 'Post Production'),
+        type: Sequelize.ENUM('Returning Series', 'Ended', 'Released', 'In Production', 'Planned', 'Canceled', 'Post Production', 'Pilot'),
         allowNull: true
     },
 }, {
