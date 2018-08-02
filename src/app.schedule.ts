@@ -10,7 +10,7 @@ export class AppSchedule {
     public runMovieUpdates() {
         const rule = '0 0 14 * * 1'; //Every Monday at 14.00 UTC
 
-        scheduleJob(rule, fireDate => {
+        scheduleJob(rule, (fireDate: Date) => {
             let updatedNumber: any = {
                 movies: null,
                 shows: null
