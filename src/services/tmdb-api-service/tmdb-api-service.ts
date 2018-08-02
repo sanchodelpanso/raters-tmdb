@@ -58,11 +58,11 @@ export class TmdbApiService {
     }
 
     private movieDetailsUrl(id: number) {
-        return `${this.baseUrl}/movie/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits`;
+        return `${this.baseUrl}/movie/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits,videos`;
     }
 
     private tvShowDetailsUrl(id: number) {
-        return `${this.baseUrl}/tv/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits,external_ids`;
+        return `${this.baseUrl}/tv/${id}?api_key=${this.apiKey}&language=en-US&append_to_response=credits,external_ids,videos`;
     }
 
     private personDetailsUrl(id: number) {
@@ -92,8 +92,7 @@ export class TmdbApiService {
                 };
 
                 if (error || response.statusCode !== 200) {
-                    console.log('error');
-                    console.log(error);
+                    console.error(error);
                     resolve(result);
                 }
 
@@ -154,12 +153,12 @@ export class TmdbApiService {
         download(url, folder).then(() => {
             console.log(`FILE DOWNLOADED:`, url);
             fs.createReadStream(`${folder}/${fileName}`)
-                .on('error', (err: any) => console.log(err))
+                .on('error', (err: any) => console.error(err))
                 .pipe(zlib.createUnzip())
                 .pipe(fs.createWriteStream(`${folder}/${dataFileName}`))
                 .on('close', () => {
                     const reader = new LineByLineReader(`${folder}/${dataFileName}`);
-                    reader.on('error', (err: any) => console.log(err));
+                    reader.on('error', (err: any) => console.error(err));
                     reader.on('line', (line: any) => {
                         const movie: ShortMovie = JSON.parse(line);
 
@@ -191,12 +190,12 @@ export class TmdbApiService {
         download(url, folder).then(() => {
             console.log(`FILE DOWNLOADED:`, url);
             fs.createReadStream(`${folder}/${fileName}`)
-                .on('error', (err: any) => console.log(err))
+                .on('error', (err: any) => console.error(err))
                 .pipe(zlib.createUnzip())
                 .pipe(fs.createWriteStream(`${folder}/${dataFileName}`))
                 .on('close', () => {
                     const reader = new LineByLineReader(`${folder}/${dataFileName}`);
-                    reader.on('error', (err: any) => console.log(err));
+                    reader.on('error', (err: any) => console.error(err));
                     reader.on('line', (line: any) => {
                         const movie: ShortTv = JSON.parse(line);
 

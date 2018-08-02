@@ -17,6 +17,7 @@ import { MovieCompany, MovieCompanyAttribute } from '../models/movie-company';
 import { MovieGenre, MovieGenreAttribute } from '../models/movie-genre';
 import { StepObservable } from '../utils/step-observable';
 import { TmdbTvShow } from '../services/tmdb-api-service/models/tv-show';
+import { Video, VideoAttribute } from "../models/video";
 
 
 export enum ProcessingType {
@@ -30,7 +31,7 @@ export class TMDBWorker {
     private tmdb: TmdbApiService = tmdb;
     private storagePrefix = 'tmdb_worker';
 
-    public test() {
+    public force() {
         // this.syncMovies(ProcessingType.MOVIE).then(() => {
         //     console.log('DONE MOVIE SYNC');
         // });
@@ -40,13 +41,13 @@ export class TMDBWorker {
         // });
     }
 
-    public updateMovies(): Promise<number> {
+    public updateMovies(force: boolean = false): Promise<number> {
         return new Promise((resolve) => {
             /*
              TODO: handle errors
              */
             console.log('MOVIE UPDATE: START');
-            const popularityThreshold = 0.01;
+            const popularityThreshold = 0.1;
             const key = `id_queue_${ProcessingType.MOVIE}`;
             const listKey = `${this.storagePrefix}_${key}`;
 
@@ -67,7 +68,7 @@ export class TMDBWorker {
                     .subscribe(
                         (line: FileMovieResponse) => {
                             const movie = line.movie;
-                            this.processId(movie.id, ProcessingType.MOVIE).then(() => {
+                            this.processId(movie.id, ProcessingType.MOVIE, force).then(() => {
                                 line.next();
                             });
                         },
@@ -88,13 +89,13 @@ export class TMDBWorker {
         });
     }
 
-    public updateTvSeries(): Promise<number> {
+    public updateTvSeries(force: boolean = false): Promise<number> {
         return new Promise((resolve, reject) => {
             /*
              TODO: handle errors
              */
             console.log('TV SERIES UPDATE: START');
-            const popularityThreshold = 0.01;
+            const popularityThreshold = 0.1;
             const key = `id_queue_${ProcessingType.TV}`;
             const listKey = `${this.storagePrefix}_${key}`;
             let showsUpdated: number;
@@ -114,7 +115,7 @@ export class TMDBWorker {
                     .subscribe(
                         (line: FileTvResponse) => {
                             const movie = line.tv;
-                            this.processId(movie.id, ProcessingType.TV).then(() => {
+                            this.processId(movie.id, ProcessingType.TV, force).then(() => {
                                 line.next();
                             });
                         },
@@ -170,6 +171,7 @@ export class TMDBWorker {
                                 this.saveMoviePeopleCollection(movies, movieIds)
                                     .then(() => this.saveMovieGenreCollection(movies, movieIds))
                                     .then(() => this.saveMovieCompanyCollection(movies, movieIds))
+                                    .then(() => this.saveMovieVideoCollection(movies, movieIds))
                                     .then(() => {
                                         console.timeEnd(`All data save(${movies.map(i => i.id).toString()})`);
                                     })
@@ -218,6 +220,7 @@ export class TMDBWorker {
                                     this.saveMoviePeopleCollection(series, movieIds)
                                         .then(() => this.saveMovieGenreCollection(series, movieIds))
                                         .then(() => this.saveMovieCompanyCollection(series, movieIds))
+                                        .then(() => this.saveMovieVideoCollection(series, movieIds))
                                         .then(() => {
                                             console.timeEnd(`All data save(${series.map(i => i.id).toString()})`);
                                         })
@@ -247,14 +250,22 @@ export class TMDBWorker {
         });
     }
 
-    private processId(id: number, type: ProcessingType) {
+    private processId(id: number, type: ProcessingType, force: boolean = false) {
         return new Promise((resolve, reject) => {
             const key = `id_queue_${type}`;
             let today: moment.Moment = moment();
 
             this.getRecord(id, type).then((record: MovieInstance) => {
                 if (!record
-                    || (type === ProcessingType.MOVIE && (today.isBefore(record.release_date) || record.status !== 'Released'))
+                    || force
+                    || (
+                        type === ProcessingType.MOVIE
+                        && (
+                            today.isBefore(record.release_date)
+                            || record.status !== 'Released'
+                            || today.subtract(1, 'year').isBefore(record.release_date)
+                        )
+                    )
                     || (type === ProcessingType.TV && record.status !== 'Ended')) {
                     this.pushToStorage(key, String(id));
                 }
@@ -334,6 +345,33 @@ export class TMDBWorker {
 
     }
 
+    private saveMovieVideoCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[], idsRelation: any) {
+        const movieIds: number[] = values(idsRelation);
+
+        const moviesVideos: VideoAttribute[] = flatten(
+            movies.map(movie => {
+                const videos = movie.videos.results.filter(video => video.type === 'Trailer' && video.site === 'Youtube');
+                return map(videos, video => {
+                    return {
+                        id: video.id,
+                        movie_id: idsRelation[movie.id],
+                        name: video.name,
+                        key: video.key
+                    };
+                });
+            })
+        );
+
+        return Video
+            .destroy({
+                where: {
+                    movie_id: movieIds
+                }
+            })
+            .then(() => Video.bulkCreate(moviesVideos));
+
+    }
+
     private saveMovieGenreCollection<T extends TmdbTvShow | TmdbMovie>(movies: T[], idsRelation: any) {
         const movieIds: number[] = values(idsRelation);
 
@@ -372,7 +410,7 @@ export class TMDBWorker {
         const allPeopleCrew = flatten(
             moviesTmdb
                 .map(movieTmdb => {
-                    const tmdbCrews = get<T, TmdbCrew[]>(movieTmdb, 'credits.crew');
+                    const tmdbCrews = get(movieTmdb, 'credits.crew') as TmdbCrew[];
                     return map(tmdbCrews, item => {
                         return {
                             name: item.name,
@@ -388,7 +426,7 @@ export class TMDBWorker {
         const allPeopleCast = flatten(
             moviesTmdb
                 .map(movieTmdb => {
-                    const tmdbCrews = get<T, TmdbCast[]>(movieTmdb, 'credits.cast');
+                    const tmdbCrews = get(movieTmdb, 'credits.cast') as TmdbCast[];
                     return map(tmdbCrews, item => {
                         return {
                             name: item.name,
@@ -491,7 +529,7 @@ export class TMDBWorker {
 
     private saveTvShow(showTmdb: TmdbTvShow): Promise<MovieInstance> {
         return new Promise((resolve, reject) => {
-            const imdbId = get<TmdbTvShow, string>(showTmdb, 'external_ids.imdb_id');
+            const imdbId = get(showTmdb, 'external_ids.imdb_id') as string;
             const avgRuntime = sum(showTmdb.episode_run_time) ? (sum(showTmdb.episode_run_time)/showTmdb.episode_run_time.length) : null;
 
             const movieAttrs: MovieAttribute = {

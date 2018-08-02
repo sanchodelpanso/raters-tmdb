@@ -5,6 +5,7 @@ import { TmdbCast } from './cast';
 import { TmdbCrew } from './crew';
 import { TmdbPerson } from './person';
 import { TmdbNetwork } from './network';
+import {TmdbMovieVideo} from "./movie";
 
 export type TmdbTvStatus = 'Returning Series' | 'Ended';
 
@@ -31,6 +32,9 @@ export interface  TmdbTvShow {
     status: TmdbTvStatus;
     vote_average: number;
     vote_count: number;
+    videos: {
+        results: Array<TmdbMovieVideo>;
+    };
     credits: {
         cast: Array<TmdbCast>;
         crew: Array<TmdbCrew>

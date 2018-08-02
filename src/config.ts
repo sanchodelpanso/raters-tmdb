@@ -21,5 +21,9 @@ export const config = {
 
     admin: {
         email: ['sanchodelpanso@gmail.com', 'ratersapp@gmail.com']
+    },
+
+    search: {
+        host: 'http://admin.ratersapp.com/api/v2'
     }
 }
