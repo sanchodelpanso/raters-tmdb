@@ -31,7 +31,7 @@ export class AppSchedule {
     }
 
     public runForceMovieUpdates() {
-        const rule = '0 58 22 * * 3'; //Every Monday at 14.00 UTC
+        const rule = '0 35 20 * * 4'; //Every Monday at 14.00 UTC
 
         scheduleJob(rule, () => {
             let updatedNumber: any = {
