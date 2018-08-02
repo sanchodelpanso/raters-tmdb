@@ -10,13 +10,13 @@ export class AppSchedule {
     public runMovieUpdates() {
         const rule = '0 0 14 * * 1'; //Every Monday at 14.00 UTC
 
-        scheduleJob(rule, (fireDate: Date) => {
+        scheduleJob(rule, () => {
             let updatedNumber: any = {
                 movies: null,
                 shows: null
             };
 
-            const force = Math.ceil(fireDate.getDate() / 7) === 1;
+            const force = Math.ceil(new Date().getDate() / 7) === 1;
 
             tmdbWorker.updateTvSeries(force)
                 .then(updated =>  {
