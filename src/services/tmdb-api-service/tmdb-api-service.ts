@@ -12,11 +12,19 @@ import * as LineByLineReader from 'line-by-line';
 
 import { config } from '../../config';
 import { TmdbTvShow } from './models/tv-show';
+import {TmdbPerson, TmdbPersonFull} from "./models/person";
 
 export interface ShortMovie {
     adult: boolean;
     id: number;
-    original_title: number;
+    original_title: string;
+    popularity: number;
+}
+
+export interface ShortPerson {
+    adult: boolean;
+    id: number;
+    name: string;
     popularity: number;
 }
 
@@ -32,6 +40,10 @@ export interface FileLineResponse {
 
 export interface FileMovieResponse extends FileLineResponse {
     movie: ShortMovie;
+}
+
+export interface FilePersonResponse extends FileLineResponse {
+    person: ShortPerson;
 }
 
 export interface FileTvResponse extends FileLineResponse {
@@ -77,6 +89,11 @@ export class TmdbApiService {
     private tvSeriesFileName(): string {
         const date = moment().subtract(1, "days").format('MM_DD_YYYY');
         return `tv_series_ids_${date}.json.gz`;
+    }
+
+    private peopleFileName(): string {
+        const date = moment().subtract(1, "days").format('MM_DD_YYYY');
+        return `person_ids_${date}.json.gz`;
     }
 
     public discoverMovies(page: number): Promise<{ movies: any, currentPage: number, totalPages: number }> {
@@ -131,11 +148,11 @@ export class TmdbApiService {
         });
     }
 
-    public getPersonById(id: number): Promise<any> {
+    public getPersonById(id: number): Promise<TmdbPersonFull> {
         return new Promise((resolve, reject) => {
             request.get({url: this.personDetailsUrl(id), json: true}, function (error: any, response: any, body: any) {
                 if (error || response.statusCode !== 200)
-                    resolve(false);
+                    resolve(null);
 
                 resolve(body);
             });
@@ -202,6 +219,43 @@ export class TmdbApiService {
                         reader.pause();
                         fileSub.next(<FileTvResponse>{
                             tv: movie,
+                            next: reader.resume.bind(reader)
+                        });
+                    });
+                    reader.on('end', () => {
+                        rimraf(folder, () => {
+                            console.log(`FILE DELETED:`, url);
+                            fileSub.complete();
+                        });
+                    });
+                });
+        });
+
+        return fileSub.asObservable();
+    }
+
+    public readPeopleFile(): Observable<FilePersonResponse> {
+        const folder = 'temp';
+        const fileName = this.peopleFileName();
+        const dataFileName = 'data.txt';
+        const url = this.fileBaseUrl + fileName;
+        const fileSub = new Rx.Subject();
+
+        download(url, folder).then(() => {
+            console.log(`FILE DOWNLOADED:`, url);
+            fs.createReadStream(`${folder}/${fileName}`)
+                .on('error', (err: any) => console.error(err))
+                .pipe(zlib.createUnzip())
+                .pipe(fs.createWriteStream(`${folder}/${dataFileName}`))
+                .on('close', () => {
+                    const reader = new LineByLineReader(`${folder}/${dataFileName}`);
+                    reader.on('error', (err: any) => console.error(err));
+                    reader.on('line', (line: any) => {
+                        const person: ShortPerson = JSON.parse(line);
+
+                        reader.pause();
+                        fileSub.next(<FilePersonResponse>{
+                            person: person,
                             next: reader.resume.bind(reader)
                         });
                     });

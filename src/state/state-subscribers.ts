@@ -4,16 +4,18 @@ import { mailer } from '../app.mailer';
 export const subscribers: Array<{state: State, listner: (...args: any[])=>void}> = [
     {
         state: State.TMDB_MOVIE_TV_DONE,
-        listner: ({movies, shows}) => {
-            const subject = 'Movies and TV Series were updated.';
+        listner: ({movies, shows, people}) => {
+            const subject = 'Movies, TV Series and People profiles were updated.';
 
             const body = `
                  --------------------------------------------
                 | Update Info:
                  --------------------------------------------
-                | ${movies} movies were updated;
+                | MOVIES:       |   ${movies}
                  --------------------------------------------
-                | ${shows} TV shows were updated;
+                | TV SHOWS      |   ${shows}
+                 --------------------------------------------
+                | PEOPLE        |   ${people}
                  --------------------------------------------
             `;
 

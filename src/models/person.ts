@@ -6,10 +6,12 @@ export interface PersonAttribute {
     imdb_id?:       number;
     name:           string;
     birthday?:      string;
+    biography?:     string;
     deathday?:      string;
     gender?:        number;
     place_of_birth?:string;
     profile_path:   string;
+    tmdb_popularity?: number;
 }
 
 export interface PersonInstance extends Sequelize.Instance<PersonAttribute>, PersonAttribute {
@@ -54,7 +56,11 @@ export const Person: PersonModel = db.sequelize.define<PersonInstance, PersonAtt
     profile_path: {
         type: Sequelize.STRING(255),
         allowNull: true
-    }
+    },
+    tmdb_popularity: {
+        type: Sequelize.FLOAT,
+        allowNull: true
+    },
 }, {
     tableName: 'people'
 });

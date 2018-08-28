@@ -1,15 +1,22 @@
 import { noop, range, unionWith, unionBy, isEqual, map, get, flatten, includes, sum, values } from 'lodash';
 import * as moment from 'moment';
+import * as async from 'async';
 const Rx = require('rxjs/Rx');
 import 'rxjs/add/operator/filter';
 
-import { TmdbApiService, tmdb, FileMovieResponse, FileTvResponse } from '../services/tmdb-api-service/tmdb-api-service';
+import {
+    TmdbApiService,
+    tmdb,
+    FileMovieResponse,
+    FileTvResponse,
+    FilePersonResponse
+} from '../services/tmdb-api-service/tmdb-api-service';
 import { Movie, MovieAttribute, MovieInstance } from '../models/movie';
 import db from '../app.db';
 import { TmdbMovie } from '../services/tmdb-api-service/models/movie';
 import { TmdbCrew } from '../services/tmdb-api-service/models/crew';
 import { TmdbCast } from '../services/tmdb-api-service/models/cast';
-import { Person, PersonAttribute } from '../models/person';
+import {Person, PersonAttribute, PersonInstance} from '../models/person';
 import { Crew, CrewAttribute } from '../models/crew';
 import { Cast, CastAttribute } from '../models/cast';
 import { Company, CompanyAttribute } from '../models/company';
@@ -18,6 +25,7 @@ import { MovieGenre, MovieGenreAttribute } from '../models/movie-genre';
 import { StepObservable } from '../utils/step-observable';
 import { TmdbTvShow } from '../services/tmdb-api-service/models/tv-show';
 import { Video, VideoAttribute } from "../models/video";
+import {TmdbPersonFull} from "../services/tmdb-api-service/models/person";
 
 
 export enum ProcessingType {
@@ -30,6 +38,53 @@ export class TMDBWorker {
 
     private tmdb: TmdbApiService = tmdb;
     private storagePrefix = 'tmdb_worker';
+
+    public updatePeople(): Promise<number> {
+        return new Promise((resolve) => {
+            /*
+             TODO: handle errors
+             */
+            console.log('PEOPLE UPDATE: START');
+            const popularityThreshold = 0.1;
+            const key = `id_queue_${ProcessingType.PEOPLE}`;
+            const listKey = `${this.storagePrefix}_${key}`;
+
+            let peopleUpdated: number;
+
+            this.clearStorage(key).then(() => {
+                console.log('FETCH START');
+                this.tmdb.readPeopleFile()
+                    .filter((line: FilePersonResponse) => {
+                        const person = line.person;
+                        const proceed = person.popularity > popularityThreshold && person.adult === false;
+
+                        if (!proceed) {
+                            line.next();
+                        }
+                        return proceed;
+                    })
+                    .subscribe(
+                        (line: FilePersonResponse) => {
+                            const person = line.person;
+                            this.pushIDToStorage(ProcessingType.PEOPLE, person.id);
+                            line.next();
+                        },
+                        noop,
+                        () => {
+                            console.log('FETCH DONE');
+                            console.log('SYNC PEOPLE: START');
+
+                            db.redis.llen(listKey, (err, val) => peopleUpdated = val);
+
+                            this.syncPeople().then(() => {
+                                console.log('SYNC PEOPLE: DONE');
+                                resolve(peopleUpdated);
+                            });
+                        }
+                    );
+            });
+        });
+    }
 
     public updateMovies(force: boolean = false): Promise<number> {
         return new Promise((resolve) => {
@@ -225,6 +280,42 @@ export class TMDBWorker {
         });
     }
 
+    private syncPeople() {
+        const key = `id_queue_${ProcessingType.PEOPLE}`;
+        const idRange = range(0, 4);
+
+        return new Promise((resolve) => {
+            Rx.Observable.interval(1050)
+                .switchMap(() => Rx.Observable.fromPromise(Promise.all(idRange.map(() => this.popFromStorage(key)))))
+                .map((data: string[]) => data.map(id => parseInt(id)).filter(id => !isNaN(id)))
+                .takeWhile((ids: number[]) => ids.length)
+                .switchMap((ids: number[]) => Rx.Observable.fromPromise(Promise.all(ids.map(id => this.tmdb.getPersonById(id)))))
+                .map((people: TmdbPersonFull[]) => people.filter(person => person))
+                .subscribe((people: TmdbPersonFull[]) => {
+                        StepObservable
+                            .of(people)
+                            .subscribe((data) => {
+                                    const person = data.value;
+                                    this.savePerson(person)
+                                        .then((personInDb) => {
+                                            console.log(`All data save(${personInDb.id})`);
+                                            data.next();
+                                            /*
+                                             TODO: Update state in Redis
+                                             */
+                                        }).catch(err => console.log(err));
+                                },
+                                noop,
+                                noop
+                            );
+                    },
+                    (err: any) => console.log('Error In PIPE', err),
+                    () => {
+                        resolve();
+                    });
+        });
+    }
+
     private popFromStorage(key: string) {
         return new Promise((resolve, reject) => {
             const listKey = `${this.storagePrefix}_${key}`;
@@ -252,17 +343,22 @@ export class TMDBWorker {
                         type === ProcessingType.MOVIE
                         && (
                             today.isBefore(record.release_date)
-                            || record.status !== 'Released'
+                            || ['Released', 'Canceled'].indexOf(record.status) < 0
                             || today.subtract(1, 'year').isBefore(record.release_date)
                         )
                     )
-                    || (type === ProcessingType.TV && record.status !== 'Ended')) {
+                    || (type === ProcessingType.TV && ['Released', 'Canceled'].indexOf(record.status) < 0)) {
                     this.pushToStorage(key, String(id));
                 }
 
                 resolve();
             });
         });
+    }
+
+    private pushIDToStorage(type: ProcessingType, id: number) {
+        const key = `id_queue_${type}`;
+        this.pushToStorage(key, String(id));
     }
 
     private pushToStorage(key: string, value: string) {
@@ -407,7 +503,8 @@ export class TMDBWorker {
                             profile_path: item.profile_path,
                             id: item.id,
                             movie_id: movieTmdb.id,
-                            job: item.job
+                            job: item.job,
+                            gender: item.gender
                         };
                     });
                 })
@@ -423,7 +520,8 @@ export class TMDBWorker {
                             profile_path: item.profile_path,
                             id: item.id,
                             movie_id: movieTmdb.id,
-                            character: item.character
+                            character: item.character,
+                            gender: item.gender
                         };
                     });
                 })
@@ -553,6 +651,38 @@ export class TMDBWorker {
                 .then((movie) => {
                     resolve(movie);
                 });
+        });
+    }
+
+    private savePerson(personTmdb: TmdbPersonFull): Promise<PersonInstance> {
+        return new Promise((resolve, reject) => {
+            const personAttrs: PersonAttribute = {
+                id: personTmdb.id,
+                imdb_id: personTmdb.imdb_id ? parseInt(personTmdb.imdb_id.substr(2)) : null,
+                name: personTmdb.name,
+                birthday: personTmdb.birthday || null,
+                deathday: personTmdb.deathday || null,
+                biography: personTmdb.biography,
+                gender: personTmdb.gender,
+                profile_path: personTmdb.profile_path,
+                place_of_birth: personTmdb.place_of_birth,
+                tmdb_popularity: personTmdb.popularity
+            };
+
+            Person
+                .findOne({
+                    where: {
+                        id: personAttrs.id
+                    }
+                })
+                .then((person) => {
+                    if (person) {
+                        return person.update(personAttrs)
+                    }
+
+                    return Person.create(personAttrs);
+                })
+                .then((person) => resolve(person));
         });
     }
 
