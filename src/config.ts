@@ -20,7 +20,7 @@ export const config = {
     },
 
     admin: {
-        email: ['sanchodelpanso@gmail.com', 'ratersapp@gmail.com']
+        email: ['ratersapp@gmail.com']
     },
 
     search: {
